@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS feeds (
     id SERIAL PRIMARY KEY,
     feed_id VARCHAR(255) NOT NULL,
     device_id VARCHAR(255) NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
-    CONSTRAINT uix_device_feed UNIQUE (device_id, feed_id)
+    CONSTRAINT uix_device_feed_feeds UNIQUE (device_id, feed_id)
 );
 
 -- Tạo bảng sensor_data
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     feed_id VARCHAR(255) NOT NULL,
     value FLOAT,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uix_device_feed_sensor_data UNIQUE (device_id, feed_id),
     CONSTRAINT sensor_data_device_feed_fkey 
         FOREIGN KEY (device_id, feed_id) 
         REFERENCES feeds(device_id, feed_id) ON DELETE CASCADE
