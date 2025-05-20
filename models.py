@@ -89,7 +89,7 @@ class SensorData(Base):
     device = relationship("Device", back_populates="sensor_data")
     feed = relationship("Feed", back_populates="sensor_data")
     __table_args__ = (
-        UniqueConstraint('device_id', 'feed_id', name='uix_device_feed'),
+        UniqueConstraint('device_id', 'feed_id', name='uix_device_feed_sensor_data'),
     )
     def __repr__(self):
         return f"<SensorData(id={self.id}, device_id='{self.device_id}', feed_id='{self.feed_id}', value={self.value})>"
@@ -149,7 +149,7 @@ class Feed(Base):
     sensor_data = relationship("SensorData", back_populates="feed", cascade="all, delete-orphan")
     
     __table_args__ = (
-        UniqueConstraint('device_id', 'feed_id', name='uix_device_feed'),
+        UniqueConstraint('device_id', 'feed_id', name='uix_device_feed_feeds'),
     )
     
     def __repr__(self):
