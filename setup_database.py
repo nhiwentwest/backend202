@@ -293,7 +293,21 @@ def setup_database(database_url):
     """
     try:
         engine = create_engine(database_url)
-        
+
+        # XÓA CONSTRAINT TRÙNG LẶP TRƯỚC KHI TẠO BẢNG
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("""
+                    ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS uix_device_feed;
+                """))
+                conn.execute(text("""
+                    ALTER TABLE feeds DROP CONSTRAINT IF EXISTS uix_device_feed;
+                """))
+                conn.commit()
+                logger.info("Đã xóa constraint uix_device_feed nếu tồn tại.")
+            except Exception as e:
+                logger.warning(f"Lỗi khi xóa constraint uix_device_feed: {str(e)}")
+
         # 1. Tạo/cập nhật cấu trúc bảng từ models
         from models import Base
         Base.metadata.create_all(bind=engine)
