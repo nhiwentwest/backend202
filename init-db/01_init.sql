@@ -29,10 +29,9 @@ CREATE TABLE IF NOT EXISTS devices (
 
 -- Tạo bảng feeds
 CREATE TABLE IF NOT EXISTS feeds (
-    id SERIAL PRIMARY KEY,
     feed_id VARCHAR(255) NOT NULL,
     device_id VARCHAR(255) NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
-    CONSTRAINT uix_device_feed_feeds UNIQUE (device_id, feed_id)
+    PRIMARY KEY (device_id, feed_id)
 );
 
 -- Tạo bảng sensor_data
