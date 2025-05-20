@@ -294,80 +294,98 @@ def setup_database(database_url):
     try:
         engine = create_engine(database_url)
         
-        # 1. Kiểm tra và lưu dữ liệu hiện có
+        # 1. Tạo/cập nhật cấu trúc bảng từ models
+        from models import Base
+        Base.metadata.create_all(bind=engine)
+        logger.info("Đã tạo/cập nhật cấu trúc bảng từ models")
+        
+        # 2. Kiểm tra và lưu dữ liệu hiện có
         with engine.connect() as conn:
+            # Kiểm tra sự tồn tại của các bảng
+            inspector = inspect(engine)
+            existing_tables = inspector.get_table_names()
+            
             # Lưu dữ liệu từ các bảng chính
             existing_data = {}
             tables_to_backup = ['users', 'devices', 'feeds', 'sensor_data']
             
             for table in tables_to_backup:
-                try:
-                    result = conn.execute(text(f"SELECT * FROM {table}"))
-                    existing_data[table] = [dict(row) for row in result]
-                    logger.info(f"Đã sao lưu {len(existing_data[table])} bản ghi từ bảng {table}")
-                except Exception as e:
-                    logger.warning(f"Không thể sao lưu bảng {table}: {str(e)}")
+                if table in existing_tables:
+                    try:
+                        with conn.begin():
+                            result = conn.execute(text(f"SELECT * FROM {table}"))
+                            existing_data[table] = [dict(row) for row in result]
+                            logger.info(f"Đã sao lưu {len(existing_data[table])} bản ghi từ bảng {table}")
+                    except Exception as e:
+                        logger.warning(f"Không thể sao lưu bảng {table}: {str(e)}")
+                        existing_data[table] = []
+                else:
+                    logger.info(f"Bảng {table} chưa tồn tại, bỏ qua bước sao lưu")
+                    existing_data[table] = []
             
-            # 2. Xóa các constraint cũ một cách an toàn
-            conn.execute(text("""
-                DO $$ 
-                BEGIN
-                    -- Xóa constraint uix_device_feed nếu tồn tại
-                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_device_feed') THEN
-                        ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS uix_device_feed;
-                        ALTER TABLE feeds DROP CONSTRAINT IF EXISTS uix_device_feed;
-                    END IF;
-                    
-                    -- Xóa các foreign key cũ
-                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sensor_data_device_id_fkey') THEN
-                        ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS sensor_data_device_id_fkey;
-                    END IF;
-                    
-                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sensor_data_device_feed_fkey') THEN
-                        ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS sensor_data_device_feed_fkey;
-                    END IF;
-                    
-                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feeds_device_id_fkey') THEN
-                        ALTER TABLE feeds DROP CONSTRAINT IF EXISTS feeds_device_id_fkey;
-                    END IF;
-                END $$;
-            """))
-            conn.commit()
-            
-            # 3. Tạo/cập nhật cấu trúc bảng từ models
-            from models import Base
-            Base.metadata.create_all(bind=engine)
+            # 3. Xóa các constraint cũ một cách an toàn
+            try:
+                with conn.begin():
+                    conn.execute(text("""
+                        DO $$ 
+                        BEGIN
+                            -- Xóa constraint uix_device_feed nếu tồn tại
+                            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_device_feed') THEN
+                                ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS uix_device_feed;
+                                ALTER TABLE feeds DROP CONSTRAINT IF EXISTS uix_device_feed;
+                            END IF;
+                            
+                            -- Xóa các foreign key cũ
+                            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sensor_data_device_id_fkey') THEN
+                                ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS sensor_data_device_id_fkey;
+                            END IF;
+                            
+                            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sensor_data_device_feed_fkey') THEN
+                                ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS sensor_data_device_feed_fkey;
+                            END IF;
+                            
+                            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feeds_device_id_fkey') THEN
+                                ALTER TABLE feeds DROP CONSTRAINT IF EXISTS feeds_device_id_fkey;
+                            END IF;
+                        END $$;
+                    """))
+                logger.info("Đã xóa các constraint cũ thành công")
+            except Exception as e:
+                logger.warning(f"Không thể xóa một số constraint: {str(e)}")
             
             # 4. Khôi phục dữ liệu đã sao lưu
             for table, data in existing_data.items():
-                if data:
+                if data and table in existing_tables:
                     try:
-                        # Xóa dữ liệu cũ
-                        conn.execute(text(f"DELETE FROM {table}"))
-                        
-                        # Khôi phục dữ liệu
-                        for row in data:
-                            columns = ', '.join(row.keys())
-                            values = ', '.join([f"'{str(v)}'" if v is not None else 'NULL' for v in row.values()])
-                            conn.execute(text(f"INSERT INTO {table} ({columns}) VALUES ({values})"))
+                        with conn.begin():
+                            # Xóa dữ liệu cũ
+                            conn.execute(text(f"DELETE FROM {table}"))
                             
-                        logger.info(f"Đã khôi phục {len(data)} bản ghi vào bảng {table}")
+                            # Khôi phục dữ liệu
+                            for row in data:
+                                columns = ', '.join(row.keys())
+                                values = ', '.join([f"'{str(v)}'" if v is not None else 'NULL' for v in row.values()])
+                                conn.execute(text(f"INSERT INTO {table} ({columns}) VALUES ({values})"))
+                                
+                            logger.info(f"Đã khôi phục {len(data)} bản ghi vào bảng {table}")
                     except Exception as e:
                         logger.error(f"Lỗi khi khôi phục dữ liệu cho bảng {table}: {str(e)}")
             
-            conn.commit()
-            
-            # 5. Kiểm tra và tạo các index cần thiết
-            conn.execute(text("""
-                -- Index cho bảng feeds
-                CREATE INDEX IF NOT EXISTS idx_feeds_device_id ON feeds(device_id);
-                CREATE INDEX IF NOT EXISTS idx_feeds_feed_id ON feeds(feed_id);
-                
-                -- Index cho bảng sensor_data
-                CREATE INDEX IF NOT EXISTS idx_sensor_data_device_feed ON sensor_data(device_id, feed_id);
-                CREATE INDEX IF NOT EXISTS idx_sensor_data_timestamp ON sensor_data(timestamp);
-            """))
-            conn.commit()
+            # 5. Tạo các index cần thiết
+            try:
+                with conn.begin():
+                    conn.execute(text("""
+                        -- Index cho bảng feeds
+                        CREATE INDEX IF NOT EXISTS idx_feeds_device_id ON feeds(device_id);
+                        CREATE INDEX IF NOT EXISTS idx_feeds_feed_id ON feeds(feed_id);
+                        
+                        -- Index cho bảng sensor_data
+                        CREATE INDEX IF NOT EXISTS idx_sensor_data_device_feed ON sensor_data(device_id, feed_id);
+                        CREATE INDEX IF NOT EXISTS idx_sensor_data_timestamp ON sensor_data(timestamp);
+                    """))
+                logger.info("Đã tạo các index thành công")
+            except Exception as e:
+                logger.warning(f"Không thể tạo một số index: {str(e)}")
             
             # 6. Kiểm tra kết quả
             inspector = inspect(engine)
