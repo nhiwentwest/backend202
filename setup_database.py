@@ -294,30 +294,6 @@ def setup_database(database_url):
     try:
         engine = create_engine(database_url)
 
-        # XÓA CONSTRAINT TRÙNG LẶP TRƯỚC KHI TẠO BẢNG
-        with engine.connect() as conn:
-            try:
-                # Kiểm tra sự tồn tại của các bảng
-                inspector = inspect(engine)
-                existing_tables = inspector.get_table_names()
-                
-                # Xóa constraint nếu bảng tồn tại
-                if 'sensor_data' in existing_tables:
-                    conn.execute(text("""
-                        ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS uix_device_feed;
-                    """))
-                    logger.info("Đã xóa constraint uix_device_feed từ bảng sensor_data.")
-                
-                if 'feeds' in existing_tables:
-                    conn.execute(text("""
-                        ALTER TABLE feeds DROP CONSTRAINT IF EXISTS uix_device_feed;
-                    """))
-                    logger.info("Đã xóa constraint uix_device_feed từ bảng feeds.")
-                
-                conn.commit()
-            except Exception as e:
-                logger.warning(f"Lỗi khi xóa constraint uix_device_feed: {str(e)}")
-
         # 1. Tạo/cập nhật cấu trúc bảng từ models
         from models import Base
         Base.metadata.create_all(bind=engine)
@@ -353,12 +329,6 @@ def setup_database(database_url):
                     conn.execute(text("""
                         DO $$ 
                         BEGIN
-                            -- Xóa constraint uix_device_feed nếu tồn tại
-                            IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_device_feed') THEN
-                                ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS uix_device_feed;
-                                ALTER TABLE feeds DROP CONSTRAINT IF EXISTS uix_device_feed;
-                            END IF;
-                            
                             -- Xóa các foreign key cũ
                             IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sensor_data_device_id_fkey') THEN
                                 ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS sensor_data_device_id_fkey;
