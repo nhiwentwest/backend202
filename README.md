@@ -2,7 +2,7 @@
 
 - **API Backend (FastAPI)**: Xử lý yêu cầu từ thiết bị IoT và ứng dụng front-end
 - **Tích hợp Adafruit IO**: Đồng bộ dữ liệu và lấy dữ liệu về database
-- **Nén Dữ liệu IDEALEM**: Giảm dung lượng lưu trữ cần thiết, giữ thông tin quan trọng, loss compression
+- **Nén Dữ liệu IDEALEM**: Giảm dung lượng lưu trữ cần thiết, giữ thông tin quan trọng, lossless compression
 - **Công cụ giải nén**: Phục hồi dữ liệu gốc từ dữ liệu nén
 
 ## Cài đặt và Sử dụng
