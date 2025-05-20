@@ -342,32 +342,7 @@ def setup_database(database_url):
                         logger.error(f"Lỗi khi xóa bảng {table}: {str(e)}")
                 conn.commit()
         
-        # Kiểm tra xem có bảng nào cần thiết bị thiếu không
-        missing_tables = [table for table in required_tables if table not in existing_tables]
-        if missing_tables:
-            logger.warning(f"Thiếu các bảng cần thiết: {missing_tables}")
-            logger.warning("Các bảng này sẽ được tạo mới")
-            
-            # Tạo các bảng còn thiếu
-            from models import Base
-            Base.metadata.create_all(bind=engine)
-            logger.info("Đã tạo các bảng còn thiếu thành công")
-        
-        # Kiểm tra lại sau khi thiết lập
-        inspector = inspect(engine)
-        final_tables = inspector.get_table_names()
-        logger.info(f"Các bảng hiện có trong database: {final_tables}")
-        
-        # Kiểm tra xem tất cả các bảng cần thiết đã có chưa
-        if all(table in final_tables for table in required_tables):
-            logger.info("Tất cả các bảng cần thiết đã được thiết lập thành công!")
-        else:
-            logger.error("Vẫn còn thiếu một số bảng cần thiết!")
-            missing = [table for table in required_tables if table not in final_tables]
-            logger.error(f"Các bảng còn thiếu: {missing}")
-            raise Exception("Thiết lập database không hoàn tất!")
-            
-        # Tạo/cập nhật bảng sensor_data và feeds
+        # Tạo/cập nhật bảng feeds và sensor_data
         with engine.connect() as conn:
             # Tạo bảng feeds
             conn.execute(text("""
@@ -407,6 +382,24 @@ def setup_database(database_url):
             # Commit các thay đổi
             conn.commit()
         
+        # Tạo các bảng còn lại từ models
+        from models import Base
+        Base.metadata.create_all(bind=engine)
+        
+        # Kiểm tra lại sau khi thiết lập
+        inspector = inspect(engine)
+        final_tables = inspector.get_table_names()
+        logger.info(f"Các bảng hiện có trong database: {final_tables}")
+        
+        # Kiểm tra xem tất cả các bảng cần thiết đã có chưa
+        if all(table in final_tables for table in required_tables):
+            logger.info("Tất cả các bảng cần thiết đã được thiết lập thành công!")
+        else:
+            logger.error("Vẫn còn thiếu một số bảng cần thiết!")
+            missing = [table for table in required_tables if table not in final_tables]
+            logger.error(f"Các bảng còn thiếu: {missing}")
+            raise Exception("Thiết lập database không hoàn tất!")
+            
     except Exception as e:
         logger.error(f"Lỗi khi thiết lập cơ sở dữ liệu: {str(e)}")
         raise
