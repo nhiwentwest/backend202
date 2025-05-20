@@ -296,6 +296,20 @@ def setup_database(database_url):
     try:
         engine = create_engine(database_url)
         
+        # Kiểm tra và xóa các constraint cũ nếu tồn tại
+        with engine.connect() as conn:
+            # Xóa constraint uix_device_feed nếu tồn tại
+            conn.execute(text("""
+                DO $$ 
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uix_device_feed') THEN
+                        ALTER TABLE sensor_data DROP CONSTRAINT IF EXISTS uix_device_feed;
+                        ALTER TABLE feeds DROP CONSTRAINT IF EXISTS uix_device_feed;
+                    END IF;
+                END $$;
+            """))
+            conn.commit()
+        
         # Kiểm tra và xóa bảng device_config nếu tồn tại
         inspector = inspect(engine)
         if 'device_config' in inspector.get_table_names():
